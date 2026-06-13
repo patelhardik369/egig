@@ -1,0 +1,10 @@
+# --- bot runtime ---
+requests>=2.31
+python-dotenv>=1.0
+tenacity>=8.2
+rich>=13.7            # optional: pretty console logs (auto-falls back to plain)
+py-clob-client>=0.34.6   # OFFICIAL Polymarket CLOB client (resolution + REST fallback)
+websocket-client>=1.8    # real-time CLOB market-channel websocket (live odds)
+
+# --- research / analysis scripts in script/ ---
+matplotlib>=3.8       # script/gridsearch.py renders the P&L curve PNG

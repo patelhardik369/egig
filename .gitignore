@@ -1,0 +1,29 @@
+# secrets / env
+.env
+.env.*
+!.env.example
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# bot runtime data (data/ holds bot data only)
+data/positions.json
+data/trades.csv
+data/equity.csv
+data/state/
+data/logs/
+*.log
+
+# research cache (large) + generated artifacts
+script/binance_cache/
+script/*.png
+
+# os
+.DS_Store
+Thumbs.db

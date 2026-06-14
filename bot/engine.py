@@ -61,6 +61,7 @@ class Engine:
         self.last_prices: Dict[str, float] = {}
         self.always_sub_current = False          # dashboard mode: stream current window the whole time
         self.started_at = time.time()
+        self.halted = False                      # latched True if the drawdown guard trips
 
     # ------------------------------------------------------------------ resolution
     def resolve(self, condition_id: str, coin: Optional[str] = None,
@@ -176,6 +177,8 @@ class Engine:
         sig = strategy.evaluate(win, now, self.s)
         if sig is None:
             return
+        if self._drawdown_halt(now):                          # risk guard: stop bleeding a -EV regime
+            return
         token = win.token_ids[sig.losing_index]
         ask, src = self.live_ask(token)                       # may incur network latency
         # RE-CHECK timing after the odds fetch: never fill a window that has effectively ended
@@ -188,6 +191,20 @@ class Engine:
         if self.broker.fill(win, sig.losing_index, ask, sig.lead_pct, sec_left=sec_left):
             win.entered = True
             log.debug("entry odds source=%s ask=%.3f %.1fs-left", src, ask, sec_left)
+
+    def _drawdown_halt(self, now: float) -> bool:
+        if self.s.max_drawdown_pct >= 100:
+            return False
+        if self.halted:
+            return True
+        realized = self.broker.summary(now)["realized_pnl"]
+        if realized <= -self.s.starting_cash * self.s.max_drawdown_pct / 100.0:
+            self.halted = True
+            log.warning("RISK HALT: drawdown %.0f%% hit (realized $%.2f) — no new entries; "
+                        "settlement continues. Restart with --fresh after tuning.",
+                        self.s.max_drawdown_pct, realized)
+            return True
+        return False
 
     # ------------------------------------------------------------------ dashboard snapshot
     def _odds(self, token_id: str) -> dict:
@@ -205,12 +222,13 @@ class Engine:
         for coin in self.s.coins:
             win = self.windows.get((coin, epoch))
             row = {"coin": coin, "price": self.last_prices.get(coin),
-                   "open": None, "lead": None, "sec_left": None,
+                   "open": None, "lead": None, "sec_left": None, "crossings": 0,
                    "up": {}, "down": {}, "state": "—", "losing": None}
             if win:
                 row["open"] = win.open_price
                 row["lead"] = win.lead_pct()
                 row["sec_left"] = int(win.end - now)
+                row["crossings"] = win.crossings
                 row["up"] = self._odds(win.token_ids[0])
                 row["down"] = self._odds(win.token_ids[1])
                 lead = win.lead_pct()
@@ -236,6 +254,7 @@ class Engine:
             "settled": self.broker.recent_settled(8),
             "ws": bool(self.stream and self.stream.connected()),
             "uptime": now - self.started_at,
+            "halted": self.halted,
         }
 
     # ------------------------------------------------------------------ run loop

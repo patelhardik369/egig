@@ -132,14 +132,40 @@ Everything is in `.env` (see `bot/config.py`). The most important knobs:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `MAX_LEAD_PCT` | `0.04` | core filter; lower → higher win‑rate, fewer trades |
-| `MIN_CROSSINGS` | `0` | set `6` for high‑ROI / low‑volume "choppy only" mode |
-| `ENTRY_HI_S` / `ENTRY_LO_S` | `12` / `2` | the entry window before close |
+| `MIN_CROSSINGS` | `6` | **the selection brain** — only trade choppy windows (smooth ones never reverse) |
+| `MAX_LEAD_PCT` | `0.04` | the move must still be in play (tightening did not help in the post-mortem) |
+| `ENTRY_HI_S` / `ENTRY_LO_S` | `12` / `3` | the entry window before close (fill re-checked for latency) |
 | `MAX_ENTRY_PRICE` | `0.03` | max price (cents) to pay for the loser |
-| `STAKE_USD` | `8.35` | $ per window |
-| `COINS` | `btc,sol,xrp,eth` | universe (BTC/XRP/SOL carried the edge; ETH lagged) |
+| `STAKE_USD` | `1` | $ per window |
+| `COINS` | `btc,sol,xrp,eth` | all four (ETH has the highest reversal once choppiness is on) |
+| `MAX_DRAWDOWN_PCT` | `25` | halt new entries after losing this % of bankroll |
 
 Re‑tune against history with `python script/gridsearch.py`.
+
+> ⚠️ `.env` overrides `bot/config.py`. If you changed defaults, edit **`.env`** (the startup
+> log prints the effective rule, e.g. `rule |lead|<0.040% cross>=6 …` — check it matches).
+
+## Post-mortem: why the first VPS run lost (−88%) and what changed
+
+A 26-hour VPS run went **2 wins / 172 trades (1.16%)**, −$880. Forensics (`data-vps/`,
+reconstructed vs Binance + the real egig per-trade data) showed it was **not** a code bug —
+open price, side selection and settlement were all verified correct. The cause:
+
+1. **The selection brain was off** (`MIN_CROSSINGS=0`). We bought *smooth* windows
+   (median 3 crossings) which **reversed 0 / 121 times**; egig trades *choppy* windows
+   (≥6 crossings) which reverse ~10%. → now `MIN_CROSSINGS=6` by default.
+2. **The losses blamed on ETH were the strategy, not the coin.** With the choppiness filter ON,
+   ETH actually has the **highest** reversal rate of all four coins (15.9% in the target band vs
+   BTC 8.0% / XRP 11.2% / SOL 7.0%). ETH stays in `COINS`; the −$626 was just smooth-window selection.
+3. **No risk guard** → fixed stake bled the whole bankroll. → `MAX_DRAWDOWN_PCT` halt added.
+
+**Honest residual limits** (why even the fixed bot is ~break-even, not egig-rich):
+- **Decisions use Binance, resolution is Chainlink.** On the thin reversals that *are* our
+  wins, they disagree ~2–3%, which roughly **halves** the real win-rate (9.8% Binance →
+  3.9% actual). The deep fix is to drive entries from the **Chainlink** reference (or the
+  live Polymarket odds) — see issues below.
+- **We're a taker** lifting the ask; egig is a **maker** resting bids that catch panic-dumps
+  *below* fair value. That maker edge + rebates can't be reproduced by paying the ask.
 
 ---
 

@@ -43,18 +43,26 @@ def _list(name: str, default: List[str]) -> List[str]:
 class Settings:
     # --- mode / universe ---
     mode: str = os.getenv("MODE", "paper")                 # only "paper" is implemented
+    # All four coins. ETH looked like a loser on the VPS run only because the choppiness filter
+    # was OFF (we bought smooth ETH windows). Conditional on cross>=6 ETH has the HIGHEST
+    # reversal rate of all coins (15.9% in the target band) — the loser was the strategy, not ETH.
     coins: List[str] = field(default_factory=lambda: _list("COINS", ["btc", "sol", "xrp", "eth"]))
 
-    # --- strategy (defaults = the research-tuned operating point) ---
+    # --- strategy (defaults = the research-validated edge; see script/ + VPS post-mortem) ---
     entry_lo_s: int = _i("ENTRY_LO_S", 3)                  # never fill with fewer than N secs left (latency-safe)
     entry_hi_s: int = _i("ENTRY_HI_S", 12)                 # begin acting at N secs before close
     max_lead_pct: float = _f("MAX_LEAD_PCT", 0.04)         # bet only if |lead| < this (% of open) -> still in play
     min_lead_pct: float = _f("MIN_LEAD_PCT", 0.003)        # ...and a real loser exists
-    min_crossings: int = _i("MIN_CROSSINGS", 0)            # choppiness filter (>=6 = high ROI, less volume)
+    # THE selection brain: only bet windows that are still CHOPPY (price keeps crossing the open).
+    # Smooth windows (cross<6) reversed 0/121 on the VPS run; choppy ones (>=6) carry the edge.
+    min_crossings: int = _i("MIN_CROSSINGS", 6)
     max_entry_price: float = _f("MAX_ENTRY_PRICE", 0.03)   # only fill the loser at <= 3c
     min_entry_price: float = _f("MIN_ENTRY_PRICE", 0.005)  # ignore dust / 0-priced books
     stake_usd: float = _f("STAKE_USD", 8.35)               # $ per window
     max_fills_per_window: int = _i("MAX_FILLS_PER_WINDOW", 1)
+
+    # --- risk guard (stops a -EV regime from wiping the bankroll like the VPS run did) ---
+    max_drawdown_pct: float = _f("MAX_DRAWDOWN_PCT", 25.0)  # halt NEW entries after losing this % of starting cash (100 = off)
 
     # --- engine / infra ---
     window_seconds: int = 300

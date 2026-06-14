@@ -74,6 +74,11 @@ def odds_cell(o: dict, highlight: bool) -> Text:
     return Text(f"{bid} · {ask} · {last}", style=style)
 
 
+def chop_text(n: int, min_cross: int) -> Text:
+    # green once the window is choppy enough to qualify (the selection brain)
+    return Text(f"{n:>2}", style=f"bold {GOOD}" if n >= min_cross else DIM)
+
+
 def state_text(state: str) -> Text:
     return {
         "FILLED": Text("● FILLED", style=f"bold {GOOD}"),
@@ -97,6 +102,7 @@ def _markets_panel(snap: dict, s) -> Panel:
     t.add_column("OPEN", justify="right", style=DIM, no_wrap=True)
     t.add_column("Δ LEAD", justify="right", no_wrap=True)
     t.add_column("⏱", justify="right", no_wrap=True)
+    t.add_column("↕CHOP", justify="right", no_wrap=True)
     t.add_column("UP  bid·ask·last", justify="center", no_wrap=True)
     t.add_column("DOWN  bid·ask·last", justify="center", no_wrap=True)
     t.add_column("SIGNAL", justify="left", no_wrap=True)
@@ -108,6 +114,7 @@ def _markets_panel(snap: dict, s) -> Panel:
             fmt_price(c["open"]),
             lead_text(c["lead"], s.max_lead_pct),
             secs_text(c["sec_left"], s.entry_lo_s, s.entry_hi_s),
+            chop_text(c.get("crossings", 0), s.min_crossings),
             odds_cell(c["up"], highlight=(losing == 0)),
             odds_cell(c["down"], highlight=(losing == 1)),
             state_text(c["state"]),
@@ -166,8 +173,9 @@ def _header(snap: dict, s) -> Panel:
     g = Table.grid(expand=True)
     g.add_column(justify="left"); g.add_column(justify="center"); g.add_column(justify="right")
     left = Text.assemble(("⚡ egig ", f"bold {ACCENT}"), ("paper-trader", "bold white on dark_cyan"))
+    halt = Text("  ⛔ HALTED", style=f"bold {BAD}") if snap.get("halted") else Text("")
     mid = Text.assemble((time.strftime("%H:%M:%S"), "bold white"), ("  up ", DIM),
-                        (f"{up//3600:02d}:{up%3600//60:02d}:{up%60:02d}  ", "white"), ws)
+                        (f"{up//3600:02d}:{up%3600//60:02d}:{up%60:02d}  ", "white"), ws) + halt
     right = Text.assemble(("EQUITY ", DIM), (f"${sm['equity']:,.2f}", "bold white"),
                           ("   P&L ", DIM)) + money(sm["realized_pnl"], signed=True)
     g.add_row(left, mid, right)

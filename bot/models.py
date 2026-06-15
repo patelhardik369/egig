@@ -19,6 +19,7 @@ class Window:
     open_ts: Optional[float] = None
     last_price: Optional[float] = None
     crossings: int = 0               # times the underlying crossed the open level (choppiness)
+    chop_locked: bool = False        # True once an authoritative (1s-kline) crossing count is set
     n_samples: int = 0
     entered: bool = False
     settled: bool = False
@@ -38,7 +39,9 @@ class Window:
         return (self.last_price - self.open_price) / self.open_price * 100.0
 
     def update(self, price: float, ts: float) -> None:
-        if self.open_price and self.last_price is not None:
+        # live (jittery) estimate for the dashboard; replaced by an authoritative 1s-kline
+        # count at arm time, after which we stop incrementing (chop_locked).
+        if self.open_price and self.last_price is not None and not self.chop_locked:
             # sign change of (price - open) == a crossing of the open level
             if (self.last_price - self.open_price) * (price - self.open_price) < 0:
                 self.crossings += 1

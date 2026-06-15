@@ -158,6 +158,10 @@ open price, side selection and settlement were all verified correct. The cause:
    ETH actually has the **highest** reversal rate of all four coins (15.9% in the target band vs
    BTC 8.0% / XRP 11.2% / SOL 7.0%). ETH stays in `COINS`; the −$626 was just smooth-window selection.
 3. **No risk guard** → fixed stake bled the whole bankroll. → `MAX_DRAWDOWN_PCT` halt added.
+4. **(2nd run) Choppiness was mis-measured.** The live per-tick ticker price jitters across the
+   open and *over-counts* crossings, so `cross≥6` was satisfied by noise (4 of 9 traded windows
+   had <6 *true* crossings). → choppiness is now computed at arm time from **1s-kline closes**
+   (`BinanceFeed.window_choppiness`), matching the research measure exactly.
 
 **Honest residual limits** (why even the fixed bot is ~break-even, not egig-rich):
 - **Decisions use Binance, resolution is Chainlink.** On the thin reversals that *are* our

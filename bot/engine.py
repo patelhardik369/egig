@@ -174,6 +174,14 @@ class Engine:
     def _maybe_enter(self, win: Window, now: float) -> None:
         if win.entered or self.broker.has_position(win.coin, win.epoch):
             return
+        # cheap timing gate before any kline fetch
+        if not (self.s.entry_lo_s <= (win.end - now) <= self.s.entry_hi_s):
+            return
+        if not win.chop_locked:                               # authoritative choppiness, computed once
+            c = self.feed.window_choppiness(win.coin, win.epoch, int(now))
+            if c is not None:
+                win.crossings = c                             # replace the jittery live count
+            win.chop_locked = True
         sig = strategy.evaluate(win, now, self.s)
         if sig is None:
             return
